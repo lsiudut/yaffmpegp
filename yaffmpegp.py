@@ -34,7 +34,7 @@ class RetryException(Exception):
 class FFMpeg(Thread):
     def __init__(self, host, queue=None, qlimit=0, params=None):
         super(FFMpeg, self).__init__(daemon=True)
-        
+
         if not params:
             params = []
 
@@ -63,7 +63,7 @@ class FFMpeg(Thread):
         self._qlimit = qlimit
 
         self._processed_files = []
-        
+
         # scp stats
         self.scp_percent = 0
         self.scp_eta = ""
@@ -76,8 +76,8 @@ class FFMpeg(Thread):
         self._time = ""
 
         self._semaphore = Semaphore(2)
-        
-        #self.check_ffmpeg()
+
+#        self.check_ffmpeg()
 
     @property
     def processed_files(self):
@@ -102,7 +102,7 @@ class FFMpeg(Thread):
                     if type(last) is bytes:
                         last = last.decode()
                 out = ''.join(out)
-                yield out 
+                yield out
 
     def check_ffmpeg(self):
         check_ffmpeg = subprocess.Popen(
@@ -117,8 +117,13 @@ class FFMpeg(Thread):
             self.ffmpeg_version = re_version.group(1)
 
         if not hasattr(self, 'ffmpeg_version'):
-            raise Exception("FFMpeg initialization for {} failed: can't get version nr".format(self._host))
-        print("{} initialized with ffmpeg version {}".format(self._host, self.ffmpeg_version))
+            raise Exception(
+                "FFMpeg initialization for {} failed: can't "
+                "get version nr".format(self._host)
+            )
+        print("{} initialized with ffmpeg version {}".format(
+            self._host, self.ffmpeg_version
+        ))
 
         check_ffmpeg.wait()
 
@@ -136,12 +141,13 @@ class FFMpeg(Thread):
                 self.scp_percent = int(re_percent.group(1))
                 self.scp_eta = re_percent.group(2)
         if scp.returncode != 0:
-            raise RetryException("[{}] scp failed for {}->{} ({})".format(scp.returncode, src, dest, ' '.join(command)))
+            raise RetryException("[{}] scp failed for {}->{} ({})".format(
+                scp.returncode, src, dest, ' '.join(command)))
 
     def send_file(self):
         while self.healthy:
             fpath = self._send_queue.get()
-            if fpath == None:
+            if fpath is None:
                 self._send_status = FFMpegStatus.FINISHED
                 self._compress_queue.put(None)
                 return
@@ -167,13 +173,17 @@ class FFMpeg(Thread):
     def compress_file(self):
         while self.healthy:
             fname = self._compress_queue.get()
-            if fname == None:
+            if fname is None:
                 self._compress_status = FFMpegStatus.FINISHED
                 self._download_queue.put(None)
                 return
             self._compress_status = FFMpegStatus.COMPRESSING
             self._compress_fname = fname
-            command = ["ssh", "-o", "ServerAliveCountMax=3", "-o", "ServerAliveInterval=10", self._host, "ffmpeg", "-stats", "-y", "-i", "/tmp/{}".format(fname)]
+            command = [
+                "ssh", "-o", "ServerAliveCountMax=3", "-o",
+                "ServerAliveInterval=10", self._host, "ffmpeg", "-stats",
+                "-y", "-i", "/tmp/{}".format(fname)
+            ]
             command += self.params
             command += ["/tmp/{}.ts".format(fname)]
             ffmpeg = subprocess.Popen(
@@ -185,13 +195,18 @@ class FFMpeg(Thread):
                 self._last_contact = time.time()
                 if line is None:
                     break
-                re_fps = re.search(r"fps=([0-9\.\s]+).*?(time=[0-9:\.]*)", line)
+                re_fps = re.search(
+                    r"fps=([0-9\.\s]+).*?(time=[0-9:\.]*)", line
+                )
                 if re_fps:
                     self._fps = float(re_fps.group(1))
                     self._time = re_fps.group(2)
             ffmpeg.wait()
             if ffmpeg.returncode != 0:
-                raise RetryException("FFMpeg compress failed on {} for {}, returncode: {}".format(self._host, fname, ffmpeg.returncode))
+                raise RetryException(
+                    "FFMpeg compress failed on {} for {}, returncode: "
+                    "{}".format(self._host, fname, ffmpeg.returncode)
+                )
 
             self._download_queue.put(fname)
             self._compress_queue.task_done()
@@ -202,7 +217,7 @@ class FFMpeg(Thread):
     def download_file(self):
         while self.healthy:
             fname = self._download_queue.get()
-            if fname == None:
+            if fname is None:
                 self._download_status = FFMpegStatus.FINISHED
                 return
             self._download_status = FFMpegStatus.DOWNLOADING
@@ -217,11 +232,16 @@ class FFMpeg(Thread):
             self._processed_files.append(f"./{fname}.ts")
 
     def remove_files(self):
-        command = ["ssh", "-o", "ServerAliveCountMax=3", "-o", "ServerAliveInterval=10"]
+        command = [
+            "ssh", "-o", "ServerAliveCountMax=3", "-o",
+            "ServerAliveInterval=10"
+        ]
         fnames = []
         while not self._remove_queue.empty():
             try:
-                fnames.append("/tmp/{}.ts".format(self._remove_queue.get(timeout=1)))
+                fnames.append("/tmp/{}.ts".format(
+                    self._remove_queue.get(timeout=1)
+                ))
             except Empty:
                 continue
         command += fnames
@@ -267,7 +287,8 @@ class FFMpeg(Thread):
 
     @property
     def stale(self):
-        return self._status == FFMpegStatus.COMPRESSING and (time.time() - self._last_contact) > 30
+        return self._status == FFMpegStatus.COMPRESSING and \
+            (time.time() - self._last_contact) > 30
 
     @property
     def fps(self):
@@ -277,7 +298,7 @@ class FFMpeg(Thread):
 
     @property
     def finished(self):
-        return  self._status == FFMpegStatus.DRAINING and \
+        return self._status == FFMpegStatus.DRAINING and \
                 self._send_status == FFMpegStatus.FINISHED and \
                 self._compress_status == FFMpegStatus.FINISHED and \
                 self._download_status == FFMpegStatus.FINISHED
@@ -290,27 +311,42 @@ class FFMpeg(Thread):
 
     def _send_repr(self):
         if self._send_status == FFMpegStatus.SENDING:
-            return "SENDER(%s, %d, ->%s)" % (self.send_status, self.send_queue, self._send_fname)
+            return "SENDER(%s, %d, ->%s)" % (
+                self.send_status, self.send_queue, self._send_fname
+            )
         else:
             return "SENDER(%s, %d)" % (self.send_status, self.send_queue)
 
     def _compress_repr(self):
         if self._compress_status == FFMpegStatus.COMPRESSING:
-            return "COMPRESS(%s, %d, *%s)" % (self.compress_status, self.compress_queue, self._compress_fname)
+            return "COMPRESS(%s, %d, *%s)" % (
+                self.compress_status, self.compress_queue, self._compress_fname
+            )
         else:
-            return "COMPRESS(%s, %d)" % (self.compress_status, self.compress_queue)
+            return "COMPRESS(%s, %d)" % (
+                self.compress_status, self.compress_queue
+            )
 
     def _download_repr(self):
         if self._download_status == FFMpegStatus.DOWNLOADING:
-            return "DOWNLOAD(%s, %d, <-%s)" % (self.download_status, self.download_queue, self._download_fname)
+            return "DOWNLOAD(%s, %d, <-%s)" % (
+                self.download_status, self.download_queue, self._download_fname
+            )
         else:
-            return "DOWNLOAD(%s, %d)" % (self.download_status, self.download_queue)
+            return "DOWNLOAD(%s, %d)" % (
+                self.download_status, self.download_queue
+            )
 
     def _pipe_repr(self):
-        return "%s -> %s -> %s" % (self._send_repr(), self._compress_repr(), self._download_repr())
+        return "%s -> %s -> %s" % (
+            self._send_repr(), self._compress_repr(), self._download_repr()
+        )
 
     def __repr__(self):
-        return "%s\t[p%02d]: ST: %s | %s | stale: %s | fps: %s time: %s" % (self.host, self._processed, self.status, self._pipe_repr(), self.stale, self.fps, self.time)
+        return "%s\t[p%02d]: ST: %s | %s | stale: %s | fps: %s time: %s" % (
+            self.host, self._processed, self.status, self._pipe_repr(),
+            self.stale, self.fps, self.time
+        )
 
     def run(self):
         try:
@@ -334,7 +370,10 @@ class FFMpeg(Thread):
                     except Empty:
                         pass
 
-                if self._main_queue.empty() or self._main_queue.qsize() < self._qlimit:
+                if any((
+                        self._main_queue.empty(),
+                        self._main_queue.qsize() < self._qlimit
+                        )):
                     self._status = FFMpegStatus.DRAINING
                     break
 
@@ -355,18 +394,17 @@ class FFMpeg(Thread):
             self._status = FFMpegStatus.BROKEN
             self._main_queue.task_done()
             self._main_queue.put(filepath)
-            thread.exit()
+
 
 if __name__ == "__main__":
     from glob import glob
     from tempfile import TemporaryDirectory
-    
-    import sys
+
     import getpass
     import argparse
 
     parser = argparse.ArgumentParser(
-        description = 'Yet Another FFmpeg paralleizer'
+        description='Yet Another FFmpeg paralleizer'
     )
     parser.add_argument(
         '--hostlist',
@@ -406,7 +444,11 @@ if __name__ == "__main__":
 
     with TemporaryDirectory() as tmp:
         subprocess.run(
-            ['ffmpeg', '-i', args.file, '-c', 'copy', '-f', 'segment', '-reset_timestamps', '1', '-segment_time', str(args.segment_length), f"{tmp}/output%4d.mp4"]
+            [
+                'ffmpeg', '-i', args.file, '-c', 'copy', '-f', 'segment',
+                '-reset_timestamps', '1', '-segment_time',
+                str(args.segment_length), f"{tmp}/output%4d.mp4"
+            ]
         )
         files = glob(f"{tmp}/*.mp4")
 
@@ -416,15 +458,18 @@ if __name__ == "__main__":
             queue.put(f)
         print("Creating threads structures...")
         ffmpegs = [
-            FFMpeg(f"{args.ssh_user}@{host}", queue, params=ffmpegargs) for host in args.hostlist
+            FFMpeg(f"{args.ssh_user}@{host}", queue, params=ffmpegargs)
+            for host in args.hostlist
         ]
 
         print("Starting threads...")
         for f in ffmpegs:
             f.start()
-        
+
         overall_fps = [0.0]
-        while any(map(lambda x: x.status != FFMpegStatus.FINISHED.name, ffmpegs)):
+        while any(
+                map(lambda x: x.status != FFMpegStatus.FINISHED.name, ffmpegs)
+                ):
             print("Qsize: %d" % queue.qsize())
             fps = 0.
             for f in ffmpegs:
@@ -433,14 +478,21 @@ if __name__ == "__main__":
             overall_fps.append(fps)
             if len(overall_fps) > 100:
                 overall_fps.pop(0)
-            print("AVG: %.02f fps | CURR: %.02f fps" % (sum(overall_fps)/len(overall_fps), fps))
+            print("AVG: %.02f fps | CURR: %.02f fps" % (
+                    sum(overall_fps)/len(overall_fps), fps
+                ))
             print()
             time.sleep(1)
 
-        processed_files = sorted([x for y in ffmpegs for x in y.processed_files])
+        processed_files = sorted(
+            [x for y in ffmpegs for x in y.processed_files]
+        )
 
-        # this is horrible flacky part, hacked this way just to get shit 
+        # this is horrible flacky part, hacked this way just to get shit
         subprocess.run(
-            ["ffmpeg", "-i", "concat:{}".format("|".join(processed_files)), "-c", "copy", "output.mp4"]
+            [
+                "ffmpeg", "-i", "concat:{}".format("|".join(processed_files)),
+                "-c", "copy", "output.mp4"
+            ]
         )
         time.sleep(1)
