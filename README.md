@@ -1,2 +1,1 @@
-# yaffmpegp
-Yet Another FFmpeg parallelizer 
+# Yet Another FFmpeg parallelizer 
