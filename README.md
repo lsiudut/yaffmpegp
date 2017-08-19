@@ -79,3 +79,7 @@ AVG: 0.00 fps | CURR: 0.00 fps
 ```
 
 Average fps and current fps.
+
+### Output
+
+Files are (currently) split to files name `outputXXXX.mp4`. Results of compression is being downloaded to $PWD and final file is named output.mp4. Definitely not elegant, yet sufficient.
